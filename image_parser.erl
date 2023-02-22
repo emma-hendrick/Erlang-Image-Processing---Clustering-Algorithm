@@ -5,7 +5,6 @@
 sample_image(URL, Sample_size) ->
     wx:new(),
     Image = wxImage:new(URL),
-
     {Sample, _Percent} = getSample(Image, Sample_size),
     wxImage:saveFile(Image, "chosen_pixels.png"),
     Sample.
@@ -29,10 +28,14 @@ getPixel(Image, X, Y) ->
     G = normalize(wxImage:getGreen(Image, X, Y)),
     B = normalize(wxImage:getBlue(Image, X, Y)),
     wxImage:setRGB(Image, X, Y, 255, 0, 0),
+
+    file:write_file("pixels.csv", io_lib:format("~p, ~p, ~p\n", [R, G, B]), [append]),
+
     {R, G, B}.
 
 % Get an approximate number of pixels, spread evenly
 getSample(Image, Count) ->
+    file:write_file("pixels.csv", "", [write]),
     {Width, Height} = getSize(Image),
     {Sample, Error} = getSample(Image, Width, Height, Count),
     io:format("Percent: ~p Count: ~p Length: ~p~n", [length(Sample)/Count, Count, length(Sample)]),
