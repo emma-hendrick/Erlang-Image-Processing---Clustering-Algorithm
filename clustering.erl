@@ -7,9 +7,13 @@
 -define(INVERSE_THRESHOLD_GRADING_CONSTANT, 8).
 
 
+%% Grading Constants
+-define(BRIGHTNESS_GRADING_CONSTANT, 1/2).
+
+
 %% Clustering Constants
 -define(MAX_CLUSTERS_TO_KEEP, 5).
--define(REFINEMENT_STEPS, 10).
+-define(REFINEMENT_STEPS, 5).
 
 
 %% Distance thresholds
@@ -20,7 +24,7 @@
 
 %% Testing
 test() ->
-    analyze_points(image_parser:sample_image("paint.png", 1000)).
+    analyze_points(image_parser:sample_image("toucan.png", 500)).
 
 
 %% Entry Point for the clustering algorithm
@@ -50,16 +54,25 @@ cluster(Point, Score, Threshold) ->
     {Point, Score, Threshold}.
 
 
+% To make a cluster score multiplier based on the brightness
+graded_center_distance(Point) ->
+    Dist = point_math:point_distance(Point, {0, 0, 0}),
+    Axis_scale = point_math:point_distance({0, 0, 0}, {255, 255, 255}),
+    Normalized_dist = Dist / Axis_scale,
+    math:pow(Normalized_dist, ?BRIGHTNESS_GRADING_CONSTANT).
+
+
 %% Assign a score to a cluster
 score_cluster(Points, Center, Threshold) -> 
     Points_in_threshold = point_threshold(Points, Center, Threshold),
+    Cluster_score_multiplier = graded_center_distance(Center),
     Total_score = lists:foldl(
         fun(Point, Acc) ->
             point_math:point_similarity(Point, Center) + Acc
         end,
         0,
         Points_in_threshold),
-    Total_score / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT).
+    (Total_score * Cluster_score_multiplier) / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT).
 
 
 %% Create a list of clusters given the data points
