@@ -1,1 +1,1 @@
-* TODO 1 - Write a JSON generation function
+* TODO 1 - Update readme lol
