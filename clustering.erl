@@ -153,7 +153,6 @@ brute_force_refine_clusters(Clusters, Points) ->
         end, Points),
 
         % This line doesn't actually give us the tuple with the highest score
-    io:format("~p~n", [Point_tuples]),
         Best_point_tuple = lists:max(Point_tuples),
 
         {_Tuple_score, Threshold} = Best_point_tuple,
