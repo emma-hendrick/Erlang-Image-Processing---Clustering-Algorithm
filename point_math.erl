@@ -1,5 +1,5 @@
 -module(point_math).
--export([point_distance/2, point_similarity/2, scale_point_to_dist_circle/2, calc_average/2]).
+-export([point_distance/2, point_similarity/2, scale_point_to_dist_circle/2, calc_average/2, round_point/1]).
 
 
 %% Find the difference from one three dimensional point to another
@@ -33,3 +33,11 @@ scale_point_to_dist_circle(Point, Distance) ->
 calc_average(A, B) -> (A + B) / 2.
 
 
+%% Calculate average point
+round_point(Point) ->
+    {X, Y, Z} = Point,
+    {
+        round(X),
+        round(Y),
+        round(Z)
+    }.
