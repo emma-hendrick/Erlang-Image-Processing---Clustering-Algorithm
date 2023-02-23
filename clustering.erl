@@ -4,7 +4,17 @@
 
 
 %% Sampling Constants
--define(SAMPLE_COUNT, 200).
+-define(SAMPLE_COUNT, 400).
+
+
+%% Distance thresholds
+-define(STARTING_DISTANCE_THRESHOLD, 30).
+-define(MIN_THRESHOLD, 15).
+-define(MAX_THRESHOLD, 50).
+
+
+%% Threshold Grading Constants
+-define(INVERSE_THRESHOLD_GRADING_CONSTANT, 10).
 
 
 %% Brightness Constants, the threshold will cut off all values below that brightness
@@ -15,12 +25,6 @@
 %% Clustering Constants
 -define(MAX_CLUSTERS_TO_KEEP, 5).
 -define(REFINEMENT_STEPS, 5).
-
-
-%% Distance thresholds
--define(STARTING_DISTANCE_THRESHOLD, 20).
--define(MIN_THRESHOLD, 1).
--define(MAX_THRESHOLD, 1000).
 
 
 %% Testing
@@ -84,7 +88,7 @@ score_cluster(Points, Center, Threshold) ->
         end,
         0,
         Points_in_threshold),
-    (Total_score * Cluster_score_multiplier) / Threshold.
+    (Total_score * Cluster_score_multiplier) / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT).
 
 
 %% Create a list of clusters given the data points
@@ -147,6 +151,9 @@ brute_force_refine_clusters(Clusters, Points) ->
                 end,
             {Score, Clamped_dist}
         end, Points),
+
+        % This line doesn't actually give us the tuple with the highest score
+    io:format("~p~n", [Point_tuples]),
         Best_point_tuple = lists:max(Point_tuples),
 
         {_Tuple_score, Threshold} = Best_point_tuple,
