@@ -3,12 +3,13 @@
 -import(debugging, [debug_log/2]).
 
 
-%% Grading Constants
--define(INVERSE_THRESHOLD_GRADING_CONSTANT, 8).
+%% Sampling Constants
+-define(SAMPLE_COUNT, 200).
 
 
-%% Grading Constants
+%% Brightness Constants, the threshold will cut off all values below that brightness
 -define(BRIGHTNESS_GRADING_CONSTANT, 1/2).
+-define(BRIGHTNESS_THRESHOLD, 40).
 
 
 %% Clustering Constants
@@ -17,24 +18,35 @@
 
 
 %% Distance thresholds
--define(MAX_DISTANCE_THRESHOLD, 24).
--define(MIN_DISTANCE_THRESHOLD, 1).
--define(STARTING_DISTANCE_THRESHOLD, ((?MAX_DISTANCE_THRESHOLD + ?MIN_DISTANCE_THRESHOLD) / 2)).
+-define(STARTING_DISTANCE_THRESHOLD, 20).
+-define(MIN_THRESHOLD, 1).
+-define(MAX_THRESHOLD, 1000).
 
 
 %% Testing
 test() ->
-    analyze_points(image_parser:sample_image("toucan.png", 500)).
+    analyze_points(image_parser:sample_image("toucan.png", ?SAMPLE_COUNT)).
 
 
 %% Entry Point for the clustering algorithm
 analyze_points(Points) ->
-    Clusters = generate_clusters(Points),
+    Removed_dark_points = remove_dark(Points),
+    Clusters = generate_clusters(Removed_dark_points),
     Sorted_clusters = sort_clusters(Clusters),
-    Refined_clusters = refine_clusters(Sorted_clusters, Points, ?REFINEMENT_STEPS),
+    Refined_clusters = brute_force_refine_clusters(Sorted_clusters, Points),
     Best_clusters = pick_best_clusters(Refined_clusters),
     Sorted_best_clusters = sort_clusters(Best_clusters),
+    csv_output(Sorted_best_clusters),
     Sorted_best_clusters.
+
+
+%% Remove all pixels below a certain brightness
+remove_dark(Points) ->
+    lists:filter(
+        fun(Point) ->
+            point_math:point_distance(Point, {0, 0, 0}) > ?BRIGHTNESS_THRESHOLD
+            end, 
+    Points).
 
 
 %% Return only points within the threshold
@@ -72,21 +84,16 @@ score_cluster(Points, Center, Threshold) ->
         end,
         0,
         Points_in_threshold),
-    (Total_score * Cluster_score_multiplier) / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT).
+    (Total_score * Cluster_score_multiplier) / Threshold.
 
 
 %% Create a list of clusters given the data points
 generate_clusters(Points) ->
-    Default_threshold = {
-        ?MIN_DISTANCE_THRESHOLD,
-        ?STARTING_DISTANCE_THRESHOLD,
-        ?MAX_DISTANCE_THRESHOLD
-        },
     lists:map(fun(Point) -> 
         cluster(
             Point,
             score_cluster(Points, Point, ?STARTING_DISTANCE_THRESHOLD),
-            Default_threshold
+            ?STARTING_DISTANCE_THRESHOLD
         )
         end, Points).
 
@@ -113,63 +120,102 @@ calc_average_point(Points) ->
         Z / Point_count
     }.
 
-%% Attempt to find a central location, and perfect range for the cluster
-refine_clusters(Clusters, _Points, 0) ->
-    Clusters;
-refine_clusters(Clusters, Points, Refinement_steps) ->
-    Updated_clusters = lists:map(
-        fun(Cluster) -> 
 
-            %% Destructure the cluster and calculate the scores for the min and max thresholds
-            {Cluster_center, Score, Threshold} = Cluster,
-            {Min_threshold, Current_threshold, Max_threshold} = Threshold,
-            Low_threshold_score = score_cluster(Points, Cluster_center, Min_threshold),
-            High_threshold_score = score_cluster(Points, Cluster_center, Max_threshold),
+%% A brute force cluster refinement technique
+brute_force_refine_clusters(Clusters, Points) ->
+    lists:map(fun(Cluster) -> 
 
-            Updated_cluster_center = calc_average_point(point_threshold(Points, Cluster_center, Current_threshold)),
-            
-            %% Log the scores for debugging
-            debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", Low_threshold_score),
-            debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", Score),
-            debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", High_threshold_score),
+        {Center, _Score, _Threshold} = Cluster,
 
-            %% Update the cluster in order to move closer to the perfect score
-            case (Score >= Low_threshold_score) and (Score >= High_threshold_score) of
-                true -> 
-                    debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep current threshold"),
-                    cluster(Updated_cluster_center, Score, 
-                        {
-                            point_math:calc_average(Min_threshold, Current_threshold),
-                            Current_threshold,
-                            point_math:calc_average(Max_threshold, Current_threshold)
-                        }
-                    );
+        Point_tuples = lists:map(fun(Point) -> 
+            Dist = point_math:point_distance(Center, Point),
+            Clamped_dist = case ((Dist < ?MAX_THRESHOLD) and (Dist > ?MIN_THRESHOLD)) of
+                true ->
+                    Dist;
                 false ->
-                    case (Low_threshold_score >= High_threshold_score) of
+                    case (Dist > ?MAX_THRESHOLD) of
                         true ->
-                            debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep low threshold"),
-                            cluster(Updated_cluster_center, Low_threshold_score, 
-                                {
-                                    Min_threshold,
-                                    point_math:calc_average(Min_threshold, Current_threshold),
-                                    Current_threshold
-                                }
-                            );
+                            ?MAX_THRESHOLD;
                         false ->
-                            debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep high threshold"),
-                            cluster(Updated_cluster_center, High_threshold_score, 
-                                {
-                                    Current_threshold,
-                                    point_math:calc_average(Max_threshold, Current_threshold),
-                                    Max_threshold
-                                }
-                            )
+                            ?MIN_THRESHOLD
                         end
-                end
-        end, 
-        Clusters
-    ),
-    refine_clusters(Updated_clusters, Points, Refinement_steps - 1).
+                end,
+            Score = 
+                case Clamped_dist == 0 of
+                    true -> 0;
+                    false -> score_cluster(Points, Center, Clamped_dist)
+                end,
+            {Score, Clamped_dist}
+        end, Points),
+        Best_point_tuple = lists:max(Point_tuples),
+
+        {_Tuple_score, Threshold} = Best_point_tuple,
+
+        Updated_cluster_center = point_math:round_point(calc_average_point(point_threshold(Points, Center, Threshold))),
+
+        Final_score = score_cluster(Points, Updated_cluster_center, Threshold),
+        cluster(Updated_cluster_center, Final_score, Threshold)
+        
+    end, Clusters).
+    
+
+%% Attempt to find a central location, and perfect range for the cluster
+% refine_clusters(Clusters, _Points, 0) ->
+%     Clusters;
+% refine_clusters(Clusters, Points, Refinement_steps) ->
+%     Updated_clusters = lists:map(
+%         fun(Cluster) -> 
+
+%             %% Destructure the cluster and calculate the scores for the min and max thresholds
+%             {Cluster_center, Score, Threshold} = Cluster,
+%             {Min_threshold, Current_threshold, Max_threshold} = Threshold,
+%             Low_threshold_score = score_cluster(Points, Cluster_center, Min_threshold),
+%             High_threshold_score = score_cluster(Points, Cluster_center, Max_threshold),
+
+%             Updated_cluster_center = point_math:round_point(calc_average_point(point_threshold(Points, Cluster_center, Current_threshold))),
+            
+%             %% Log the scores for debugging
+%             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", Low_threshold_score),
+%             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", Score),
+%             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", High_threshold_score),
+
+%             %% Update the cluster in order to move closer to the perfect score
+%             case (Score >= Low_threshold_score) and (Score >= High_threshold_score) of
+%                 true -> 
+%                     debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep current threshold"),
+%                     cluster(Updated_cluster_center, Score, 
+%                         {
+%                             point_math:calc_average(Min_threshold, Current_threshold),
+%                             Current_threshold,
+%                             point_math:calc_average(Max_threshold, Current_threshold)
+%                         }
+%                     );
+%                 false ->
+%                     case (Low_threshold_score >= High_threshold_score) of
+%                         true ->
+%                             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep low threshold"),
+%                             cluster(Updated_cluster_center, Low_threshold_score, 
+%                                 {
+%                                     Min_threshold,
+%                                     point_math:calc_average(Min_threshold, Current_threshold),
+%                                     Current_threshold
+%                                 }
+%                             );
+%                         false ->
+%                             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep high threshold"),
+%                             cluster(Updated_cluster_center, High_threshold_score, 
+%                                 {
+%                                     Current_threshold,
+%                                     point_math:calc_average(Max_threshold, Current_threshold),
+%                                     Max_threshold
+%                                 }
+%                             )
+%                         end
+%                 end
+%         end, 
+%         Clusters
+%     ),
+%     refine_clusters(Updated_clusters, Points, Refinement_steps - 1).
 
 
 %% Sort clusters by score
@@ -187,9 +233,7 @@ sort_clusters(Clusters) ->
 is_too_close(Cluster_a, Cluster_b) ->
     {Cluster_center_a, _Score_a, Threshold_a} = Cluster_a,
     {Cluster_center_b, _Score_b, Threshold_b} = Cluster_b,
-    {_Min_threshold_a, Current_threshold_a, _Max_threshold_a} = Threshold_a,
-    {_Min_threshold_b, Current_threshold_b, _Max_threshold_b} = Threshold_b,
-    point_math:point_distance(Cluster_center_a, Cluster_center_b) < point_math:calc_average(Current_threshold_a, Current_threshold_b).
+    point_math:point_distance(Cluster_center_a, Cluster_center_b) < point_math:calc_average(Threshold_a, Threshold_b).
 
 
 %% Check whether a point it too close to any clusters within a list
@@ -224,3 +268,14 @@ pick_best_clusters(_Discarded_clusters, Clusters_kept) ->
 pick_best_clusters(Clusters) ->
     pick_best_clusters(Clusters, []).
 
+
+%% Output the chosen clusters into a CSV file
+csv_output(Clusters) ->
+    file:write_file("clusters.csv", "", [write]),
+    lists:map(fun(Cluster) -> 
+        {Point, Score, Threshold} = Cluster,
+        {X, Y, Z} = Point,
+        Csv_line = io_lib:format("~p, ~p, ~p, ~p, ~p\n", [X, Y, Z, Score, Threshold]),
+        file:write_file("clusters.csv", Csv_line, [append])
+    end, Clusters).
+    
