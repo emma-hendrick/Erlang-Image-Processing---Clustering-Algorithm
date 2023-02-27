@@ -5,6 +5,7 @@
 sample_image(URL, Sample_size) ->
     wx:new(),
     Image = wxImage:new(URL),
+    io:format("Name: ~p~n", [URL]),
     {Sample, _Percent} = getSample(Image, Sample_size),
     lists:filter(fun(X) -> X =/= {0, 0, 0} end, Sample),
     wxImage:saveFile(Image, "chosen_pixels.png"),
