@@ -6,6 +6,7 @@ sample_image(URL, Sample_size) ->
     wx:new(),
     Image = wxImage:new(URL),
     {Sample, _Percent} = getSample(Image, Sample_size),
+    lists:filter(fun(X) -> X =/= {0, 0, 0} end, Sample),
     wxImage:saveFile(Image, "chosen_pixels.png"),
     Sample.
 
@@ -29,7 +30,12 @@ getPixel(Image, X, Y) ->
     B = normalize(wxImage:getBlue(Image, X, Y)),
     wxImage:setRGB(Image, X, Y, 255, 0, 0),
 
-    file:write_file("pixels.csv", io_lib:format("~p, ~p, ~p\n", [R, G, B]), [append]),
+    if
+        {R, G, B} =/= {0, 0, 0} ->
+            file:write_file("pixels.csv", io_lib:format("~p, ~p, ~p\n", [R, G, B]), [append]);
+        true ->
+            ok
+    end,
 
     {R, G, B}.
 
