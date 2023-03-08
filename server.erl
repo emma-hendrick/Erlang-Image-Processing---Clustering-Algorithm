@@ -22,16 +22,40 @@ loop(Sock) ->
 
 %% Handle incoming data
 handle(Conn) ->
+    {ok, Str} = recieve(Conn),
+    Http_content = get_http_request_content(Str),
 
     %% Send data in JSON format
     gen_tcp:send(Conn, response(
         json:serialize([
             {"fName", "Joe"},
             {"lName", "Doe"},
-            {"Age", "11"}
+            {"Age", "11"},
+            {"Test", Http_content}
         ])
     )),
     gen_tcp:close(Conn).
+
+
+%% Get incoming data
+recieve(Sock) ->
+    case gen_tcp:recv(Sock, 0, 5000) of
+        {ok, Str} ->
+            {ok, Str};
+        {error, timeout} ->
+            {error, timeout}
+    end.
+
+
+%% Get the text content of the Http request
+get_http_request_content(Http) ->
+    lists:nth(8, 
+        string:split(
+            Http, 
+            "\r\n",
+            all
+        )
+    ).
 
 
 %% Respond to client
@@ -48,5 +72,6 @@ response(Json) ->
             "Content-Length: " ++
             "~p\n\n~s",
             [size(B), B])).
+
 
 
