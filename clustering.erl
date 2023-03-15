@@ -1,5 +1,5 @@
 -module(clustering).
--export([analyze_points/1, test/0]).
+-export([analyze_points/1, test/0, run/1]).
 -import(debugging, [debug_log/2]).
 
 
@@ -29,7 +29,12 @@
 
 %% Testing
 test() ->
-    analyze_points(image_parser:sample_image("toucan.png", ?SAMPLE_COUNT)).
+    analyze_points(image_parser:sample_test_image("toucan.png", ?SAMPLE_COUNT)).
+
+
+%% Testing
+run(Image) ->
+    analyze_points(image_parser:sample_image(Image, ?SAMPLE_COUNT)).
 
 
 %% Entry Point for the clustering algorithm
@@ -41,7 +46,7 @@ analyze_points(Points) ->
     Best_clusters = pick_best_clusters(Refined_clusters),
     Sorted_best_clusters = sort_clusters(Best_clusters),
     csv_output(Sorted_best_clusters),
-    Sorted_best_clusters.
+    json:clusters_to_json(Sorted_best_clusters).
 
 
 %% Remove all pixels below a certain brightness

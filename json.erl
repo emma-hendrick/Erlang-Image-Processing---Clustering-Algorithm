@@ -1,5 +1,5 @@
 -module(json).
--export([serialize/1]).
+-export([clusters_to_json/1]).
 
 
 %% serialize JSON from a list of tuples using pattern matching and recursion!
@@ -18,5 +18,28 @@ serialize([H|T], Accum) ->
 % JSON Generator Facade
 serialize(List) ->
     serialize(List, "").
+
+
+serialize_list(List_items) ->
+    "[" ++ 
+        lists:map(fun(Item) ->
+        
+            Item ++ ","
+        
+        end, List_items) ++ 
+    "]".
+
+%% Convert clusters to JSON
+clusters_to_json(Clusters) -> 
+    Pixels = lists:map(fun(Cluster) ->
+        {Point, _Score, _Threshold} = Cluster,
+        {X, Y, Z} = Point,
+        
+        serialize([{"R", integer_to_list(X)},
+                {"G", integer_to_list(Y)},
+                {"B", integer_to_list(Z)}])
+        
+        end, Clusters),
+    "{items: " ++ serialize_list(Pixels) ++ "}".
 
 

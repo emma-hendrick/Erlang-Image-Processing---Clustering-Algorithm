@@ -23,17 +23,13 @@ loop(Sock) ->
 %% Handle incoming data
 handle(Conn) ->
     {ok, Str} = recieve(Conn),
-    Http_content = get_http_request_content(Str),
+    Youtube_id = get_http_request_content(Str),
+    Image = get_image_by_youtube_id(Youtube_id),
+
+    Data_clusters = clustering:run(Image),
 
     %% Send data in JSON format
-    gen_tcp:send(Conn, response(
-        json:serialize([
-            {"fName", "Joe"},
-            {"lName", "Doe"},
-            {"Age", "11"},
-            {"Test", Http_content}
-        ])
-    )),
+    gen_tcp:send(Conn, response_json(Data_clusters)),
     gen_tcp:close(Conn).
 
 
@@ -59,7 +55,7 @@ get_http_request_content(Http) ->
 
 
 %% Respond to client
-response(Json) ->
+response_json(Json) ->
 
     %% Convert the JSON message to binary, so it can be sent in the body of the HTTP response
     B = iolist_to_binary(Json),
@@ -74,4 +70,12 @@ response(Json) ->
             [size(B), B])).
 
 
+%% Get the thumbnail, yay
+get_image_by_youtube_id(Youtube_id) ->
+    Url = "https://img.youtube.com/vi/" ++ Youtube_id ++ "/default.jpg",
 
+    inets:start(),
+    ssl:start(),
+    {ok, Resp} = httpc:request(get, {Url, []}, [], []),
+    {{_, 200, "OK"}, _headers, Body} = Resp,
+    list_to_binary(Body).

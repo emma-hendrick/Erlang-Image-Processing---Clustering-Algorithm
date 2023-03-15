@@ -1,11 +1,22 @@
 -module(image_parser).
--export([sample_image/2]).
+-export([sample_test_image/2, sample_image/2]).
 
 % Loads and samples the image
-sample_image(URL, Sample_size) ->
+sample_test_image(Filename, Sample_size) ->
     wx:new(),
-    Image = wxImage:new(URL),
-    io:format("Name: ~p~n", [URL]),
+    Image = wxImage:new(Filename),
+    io:format("Name: ~p~n", [Filename]),
+    {Sample, _Percent} = getSample(Image, Sample_size),
+    lists:filter(fun(X) -> X =/= {0, 0, 0} end, Sample),
+    wxImage:saveFile(Image, "chosen_pixels.png"),
+    Sample.
+
+% Loads and samples the REAL image
+sample_image(Body, Sample_size) ->
+    wx:new(),
+    Image = wxImage:new({120, 90}),
+    wxImage:setData(Image, Body),
+    io:format("Name: ~p~n", ["Image"]),
     {Sample, _Percent} = getSample(Image, Sample_size),
     lists:filter(fun(X) -> X =/= {0, 0, 0} end, Sample),
     wxImage:saveFile(Image, "chosen_pixels.png"),
