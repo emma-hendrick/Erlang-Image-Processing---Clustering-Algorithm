@@ -10,7 +10,7 @@
 %% Distance thresholds
 -define(STARTING_DISTANCE_THRESHOLD, 30).
 -define(MIN_THRESHOLD, 15).
--define(MAX_THRESHOLD, 50).
+-define(MAX_THRESHOLD, 45).
 
 
 %% Threshold Grading Constants
@@ -23,7 +23,7 @@
 
 
 %% Clustering Constants
--define(MAX_CLUSTERS_TO_KEEP, 5).
+-define(MAX_CLUSTERS_TO_KEEP, 3).
 -define(REFINEMENT_STEPS, 5).
 
 
@@ -93,7 +93,7 @@ score_cluster(Points, Center, Threshold) ->
         end,
         0,
         Points_in_threshold),
-    (Total_score * Cluster_score_multiplier) / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT).
+    round((Total_score * Cluster_score_multiplier * 1000000) / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT)).
 
 
 %% Create a list of clusters given the data points
