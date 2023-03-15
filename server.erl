@@ -24,9 +24,9 @@ loop(Sock) ->
 handle(Conn) ->
     {ok, Str} = recieve(Conn),
     Youtube_id = get_http_request_content(Str),
-    Image = get_image_by_youtube_id(Youtube_id),
+    get_image_by_youtube_id(Youtube_id),
 
-    Data_clusters = clustering:run(Image),
+    Data_clusters = clustering:run(),
 
     %% Send data in JSON format
     gen_tcp:send(Conn, response_json(Data_clusters)),
@@ -78,4 +78,4 @@ get_image_by_youtube_id(Youtube_id) ->
     ssl:start(),
     {ok, Resp} = httpc:request(get, {Url, []}, [], []),
     {{_, 200, "OK"}, _headers, Body} = Resp,
-    list_to_binary(Body).
+    file:write_file("image.jpg", Body, [write]).

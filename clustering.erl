@@ -1,5 +1,5 @@
 -module(clustering).
--export([analyze_points/1, test/0, run/1]).
+-export([analyze_points/1, test/0, run/0]).
 -import(debugging, [debug_log/2]).
 
 
@@ -29,12 +29,12 @@
 
 %% Testing
 test() ->
-    analyze_points(image_parser:sample_test_image("toucan.png", ?SAMPLE_COUNT)).
+    analyze_points(image_parser:sample_image("toucan.png", ?SAMPLE_COUNT)).
 
 
 %% Testing
-run(Image) ->
-    analyze_points(image_parser:sample_image(Image, ?SAMPLE_COUNT)).
+run() ->
+    analyze_points(image_parser:sample_image("image.jpg", ?SAMPLE_COUNT)).
 
 
 %% Entry Point for the clustering algorithm

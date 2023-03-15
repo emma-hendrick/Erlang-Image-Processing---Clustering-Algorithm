@@ -3,4 +3,5 @@
 *.beam
 *.env
 *.jpeg
+*.jpg
 *.vscode
