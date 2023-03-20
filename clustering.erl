@@ -1,5 +1,5 @@
 -module(clustering).
--export([analyze_points/1, test/0, run/0]).
+-export([test/0, run/0]).
 -import(debugging, [debug_log/2]).
 
 
@@ -7,8 +7,11 @@
 -define(SAMPLE_COUNT, 400).
 
 
+%% Partitioning Constant
+-define(PARTITIONING_CONSTANT, 4).
+
+
 %% Distance thresholds
--define(STARTING_DISTANCE_THRESHOLD, 30).
 -define(MIN_THRESHOLD, 15).
 -define(MAX_THRESHOLD, 45).
 
@@ -24,7 +27,6 @@
 
 %% Clustering Constants
 -define(MAX_CLUSTERS_TO_KEEP, 3).
--define(REFINEMENT_STEPS, 5).
 
 
 %% Testing
@@ -39,14 +41,20 @@ run() ->
 
 %% Entry Point for the clustering algorithm
 analyze_points(Points) ->
+
+    %% Remove points that are too dark for the LEDs, and create the starting partitioned points and clusters
     Removed_dark_points = remove_dark(Points),
-    Clusters = generate_clusters(Removed_dark_points),
-    Sorted_clusters = sort_clusters(Clusters),
-    Refined_clusters = brute_force_refine_clusters(Sorted_clusters, Points),
-    Best_clusters = pick_best_clusters(Refined_clusters),
-    Sorted_best_clusters = sort_clusters(Best_clusters),
-    csv_output(Sorted_best_clusters),
-    json:clusters_to_json(Sorted_best_clusters).
+    Partitioned_points = partitions:partitions_init(Removed_dark_points, ?PARTITIONING_CONSTANT),
+    Partitioned_clusters = generate_clusters(Partitioned_points),
+
+    %% For each cluster, check all other clusters within the threshold to find the perfect threshold
+    Refined_clusters = brute_force_refine_clusters(Partitioned_clusters, Partitioned_points),
+
+    %% Sort them, take the first ?MAX_CLUSTERS_TO_KEEP unique clusters, and return them
+    Sorted_clusters = sort_clusters(Refined_clusters),
+    Best_clusters = pick_best_clusters(Sorted_clusters),
+    csv_output(Best_clusters),
+    json:clusters_to_json(Best_clusters).
 
 
 %% Remove all pixels below a certain brightness
@@ -97,14 +105,20 @@ score_cluster(Points, Center, Threshold) ->
 
 
 %% Create a list of clusters given the data points
-generate_clusters(Points) ->
-    lists:map(fun(Point) -> 
-        cluster(
-            Point,
-            score_cluster(Points, Point, ?STARTING_DISTANCE_THRESHOLD),
-            ?STARTING_DISTANCE_THRESHOLD
-        )
-        end, Points).
+generate_clusters(Partitions) ->
+    dict:map(fun(_Key, Points) ->
+
+        lists:map(fun(Point) -> 
+
+            Partitions_within_range = partitions:partitions_within_radius(Point, ?MIN_THRESHOLD, ?PARTITIONING_CONSTANT, Partitions),
+            Points_within_range = partitions:points_from_partitions(Partitions_within_range, Partitions),
+            cluster(
+                Point,
+                score_cluster(Points_within_range, Point, ?MIN_THRESHOLD),
+                ?MIN_THRESHOLD
+            ) end, Points
+        ) end, Partitions
+    ).
 
 
 %% Calculate the average of an array of points
@@ -131,102 +145,65 @@ calc_average_point(Points) ->
 
 
 %% A brute force cluster refinement technique
-brute_force_refine_clusters(Clusters, Points) ->
-    lists:map(fun(Cluster) -> 
+brute_force_refine_clusters(Partitioned_clusters, Partitioned_points) ->
+    dict:fold(fun(_Key, Clusters, Accum) ->
 
-        {Center, _Score, _Threshold} = Cluster,
+        %% Refine each cluster
+        Refined_cluster = lists:map(fun(Cluster) -> 
 
-        Point_tuples = lists:map(fun(Point) -> 
-            Dist = point_math:point_distance(Center, Point),
-            Clamped_dist = case ((Dist < ?MAX_THRESHOLD) and (Dist > ?MIN_THRESHOLD)) of
-                true ->
-                    Dist;
-                false ->
-                    case (Dist > ?MAX_THRESHOLD) of
+            {Center, _Score, _Threshold} = Cluster,
+            Partitions_within_max_range = partitions:partitions_within_radius(Center, ?MAX_THRESHOLD, ?PARTITIONING_CONSTANT, Partitioned_points),
+            Points_within_max_range = partitions:points_from_partitions(Partitions_within_max_range, Partitioned_points),
+
+            Point_tuples = lists:map(fun(Point) -> 
+                Dist = point_math:point_distance(Center, Point),
+                
+                Clamped_dist = case ((Dist < ?MAX_THRESHOLD) and (Dist > ?MIN_THRESHOLD)) of
+                    true ->
+                        Dist;
+                    false ->
+                        0
+                    end,
+
+                Partitions_within_range = partitions:partitions_within_radius(Center, ?MAX_THRESHOLD, ?PARTITIONING_CONSTANT, Partitioned_points),
+                Points_within_range = partitions:points_from_partitions(Partitions_within_range, Partitioned_points),
+
+                Score = 
+                    case Clamped_dist == 0 of
+                        true -> 0;
+                        false -> score_cluster(Points_within_range, Center, Clamped_dist)
+                    end,
+                {Score, Clamped_dist}
+            end, Points_within_max_range),
+
+            case length(Point_tuples) == 0 of
+                true -> 
+                    cluster(Center, 0, 0);
+
+                false -> 
+
+                    Best_point_tuple = lists:max(Point_tuples),
+                    {Tuple_score, Threshold} = Best_point_tuple,
+
+                    case (Threshold == 0) or (Tuple_score == 0) of
                         true ->
-                            ?MAX_THRESHOLD;
+                            cluster(Center, 0, 0);
+
                         false ->
-                            ?MIN_THRESHOLD
+
+                            Relevant_points = point_threshold(Points_within_max_range, Center, Threshold),
+                            Updated_cluster_center = point_math:round_point(calc_average_point(Relevant_points)),
+                            Final_score = score_cluster(Relevant_points, Updated_cluster_center, Threshold),
+
+                            cluster(Updated_cluster_center, Final_score, Threshold)
                         end
-                end,
-            Score = 
-                case Clamped_dist == 0 of
-                    true -> 0;
-                    false -> score_cluster(Points, Center, Clamped_dist)
-                end,
-            {Score, Clamped_dist}
-        end, Points),
+                end
 
-        % This line doesn't actually give us the tuple with the highest score
-        Best_point_tuple = lists:max(Point_tuples),
-
-        {_Tuple_score, Threshold} = Best_point_tuple,
-
-        Updated_cluster_center = point_math:round_point(calc_average_point(point_threshold(Points, Center, Threshold))),
-
-        Final_score = score_cluster(Points, Updated_cluster_center, Threshold),
-        cluster(Updated_cluster_center, Final_score, Threshold)
+            end, Clusters),
         
-    end, Clusters).
-    
+        lists:merge(Accum, Refined_cluster)
 
-%% Attempt to find a central location, and perfect range for the cluster
-% refine_clusters(Clusters, _Points, 0) ->
-%     Clusters;
-% refine_clusters(Clusters, Points, Refinement_steps) ->
-%     Updated_clusters = lists:map(
-%         fun(Cluster) -> 
-
-%             %% Destructure the cluster and calculate the scores for the min and max thresholds
-%             {Cluster_center, Score, Threshold} = Cluster,
-%             {Min_threshold, Current_threshold, Max_threshold} = Threshold,
-%             Low_threshold_score = score_cluster(Points, Cluster_center, Min_threshold),
-%             High_threshold_score = score_cluster(Points, Cluster_center, Max_threshold),
-
-%             Updated_cluster_center = point_math:round_point(calc_average_point(point_threshold(Points, Cluster_center, Current_threshold))),
-            
-%             %% Log the scores for debugging
-%             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", Low_threshold_score),
-%             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", Score),
-%             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_VALS", High_threshold_score),
-
-%             %% Update the cluster in order to move closer to the perfect score
-%             case (Score >= Low_threshold_score) and (Score >= High_threshold_score) of
-%                 true -> 
-%                     debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep current threshold"),
-%                     cluster(Updated_cluster_center, Score, 
-%                         {
-%                             point_math:calc_average(Min_threshold, Current_threshold),
-%                             Current_threshold,
-%                             point_math:calc_average(Max_threshold, Current_threshold)
-%                         }
-%                     );
-%                 false ->
-%                     case (Low_threshold_score >= High_threshold_score) of
-%                         true ->
-%                             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep low threshold"),
-%                             cluster(Updated_cluster_center, Low_threshold_score, 
-%                                 {
-%                                     Min_threshold,
-%                                     point_math:calc_average(Min_threshold, Current_threshold),
-%                                     Current_threshold
-%                                 }
-%                             );
-%                         false ->
-%                             debugging:debug_log("DEBUG_CLUSTER_REFINEMENT_CHOICE", "Chose to keep high threshold"),
-%                             cluster(Updated_cluster_center, High_threshold_score, 
-%                                 {
-%                                     Current_threshold,
-%                                     point_math:calc_average(Max_threshold, Current_threshold),
-%                                     Max_threshold
-%                                 }
-%                             )
-%                         end
-%                 end
-%         end, 
-%         Clusters
-%     ),
-%     refine_clusters(Updated_clusters, Points, Refinement_steps - 1).
+        end, [], Partitioned_clusters).
 
 
 %% Sort clusters by score
@@ -272,6 +249,7 @@ pick_best_clusters([Cluster | Remaining], Clusters_kept) when (length(Clusters_k
             pick_best_clusters(Remaining, [Cluster|Clusters_kept])
             end;
 
+% Once you've picked three return them. They need to be sorted by score for this to work
 pick_best_clusters(_Discarded_clusters, Clusters_kept) ->
     Clusters_kept.
 
