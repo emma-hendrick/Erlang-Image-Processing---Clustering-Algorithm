@@ -29,9 +29,19 @@
 -define(MAX_CLUSTERS_TO_KEEP, 3).
 
 
-%% Testing
+%% Testing, time execution for a few different sample counts
 test() ->
-    analyze_points(image_parser:sample_image("toucan.png", ?SAMPLE_COUNT)).
+    [time("toucan.png", 1000),
+    time("toucan.png", 2000),
+    time("toucan.png", 3000),
+    time("toucan.png", 4000),
+    time("toucan.png", 5000)].
+
+%% Testing, time the execution of a single analysis
+time(Image, Sample_count) ->
+    Start = os:timestamp(),
+    analyze_points(image_parser:sample_image(Image, Sample_count)),
+    timer:now_diff(os:timestamp(), Start) / 1000000.
 
 
 %% Testing
@@ -149,7 +159,7 @@ brute_force_refine_clusters(Partitioned_clusters, Partitioned_points) ->
     dict:fold(fun(_Key, Clusters, Accum) ->
 
         %% Refine each cluster
-        Refined_cluster = lists:map(fun(Cluster) -> 
+        Refined_clusters = list_processes:pmap(fun(Cluster) -> 
 
             {Center, _Score, _Threshold} = Cluster,
             Partitions_within_max_range = partitions:partitions_within_radius(Center, ?MAX_THRESHOLD, ?PARTITIONING_CONSTANT, Partitioned_points),
@@ -201,7 +211,7 @@ brute_force_refine_clusters(Partitioned_clusters, Partitioned_points) ->
 
             end, Clusters),
         
-        lists:merge(Accum, Refined_cluster)
+        lists:merge(Accum, Refined_clusters)
 
         end, [], Partitioned_clusters).
 
