@@ -1,10 +1,10 @@
 -module(clustering).
--export([test/0, run/0]).
+-export([test/1, run/0]).
 -import(debugging, [debug_log/2]).
 
 
 %% Sampling Constants
--define(SAMPLE_COUNT, 400).
+-define(SAMPLE_COUNT, 4000).
 
 
 %% Partitioning Constant
@@ -30,12 +30,12 @@
 
 
 %% Testing, time execution for a few different sample counts
-test() ->
-    [time("toucan.png", 1000),
-    time("toucan.png", 2000),
-    time("toucan.png", 3000),
-    time("toucan.png", 4000),
-    time("toucan.png", 5000)].
+test(Image) ->
+    [time(Image, 1000),
+    time(Image, 2000),
+    time(Image, 3000),
+    time(Image, 4000),
+    time(Image, 5000)].
 
 %% Testing, time the execution of a single analysis
 time(Image, Sample_count) ->
@@ -102,8 +102,11 @@ graded_center_distance(Point) ->
 
 
 %% Assign a score to a cluster
-score_cluster(Points, Center, Threshold) -> 
-    Points_in_threshold = point_threshold(Points, Center, Threshold),
+score_cluster([], _Center, _Threshold) -> 
+    0;
+
+score_cluster([H | T], Center, Threshold) -> 
+    Points_in_threshold = point_threshold([H | T], Center, Threshold),
     Cluster_score_multiplier = graded_center_distance(Center),
     Total_score = lists:foldl(
         fun(Point, Acc) ->
@@ -111,6 +114,16 @@ score_cluster(Points, Center, Threshold) ->
         end,
         0,
         Points_in_threshold),
+    round((Total_score * Cluster_score_multiplier * 1000000) / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT)).
+
+%% Assign a score to a cluster with a given number of points
+score_cluster(Point, Center, Threshold, Previous_score, Previous_threshold) ->
+    Cluster_score_multiplier = graded_center_distance(Center),
+    Semi_total_score = case (Cluster_score_multiplier == 0) of
+        true -> 0;
+        false -> (Previous_score * math:pow(Previous_threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT)) / (Cluster_score_multiplier * 1000000)
+    end,
+    Total_score = Semi_total_score + point_math:point_similarity(Point, Center),
     round((Total_score * Cluster_score_multiplier * 1000000) / math:pow(Threshold, 1 / ?INVERSE_THRESHOLD_GRADING_CONSTANT)).
 
 
@@ -154,6 +167,46 @@ calc_average_point(Points) ->
     }.
 
 
+%% Get all of the point tuples
+get_point_tuples([], _) -> [{0, ?MIN_THRESHOLD}];
+
+get_point_tuples([H | T], Center) ->
+    Dist = point_math:point_distance(Center, H),
+    Clamped_dist = case Dist < ?MIN_THRESHOLD of
+        true -> ?MIN_THRESHOLD;
+        false -> Dist
+    end,
+
+    Score = score_cluster([H], Center, Clamped_dist),
+
+    case Score == 0 of
+        true -> get_point_tuples(T, Center);
+        false -> 
+        case length(T) == 0 of
+            true -> [{Score, Clamped_dist}];
+            false -> lists:merge([{Score, Clamped_dist}], get_point_tuples(T, Center, Score, Clamped_dist))
+        end
+    end.
+
+get_point_tuples([H | T], Center, Previous_score, Previous_threshold) ->
+    Dist = point_math:point_distance(Center, H),
+    Clamped_dist = case Dist < ?MIN_THRESHOLD of
+        true -> ?MIN_THRESHOLD;
+        false -> Dist
+    end,
+
+    Score = score_cluster(H, Center, Clamped_dist, Previous_score, Previous_threshold),
+
+    case Score == 0 of
+        true -> get_point_tuples(T, Center, Previous_score, Previous_threshold);
+        false -> 
+        case length(T) == 0 of
+            true -> [{Score, Clamped_dist}];
+            false -> lists:merge([{Score, Clamped_dist}], get_point_tuples(T, Center, Score, Clamped_dist))
+        end
+    end.
+
+
 %% A brute force cluster refinement technique
 brute_force_refine_clusters(Partitioned_clusters, Partitioned_points) ->
     dict:fold(fun(_Key, Clusters, Accum) ->
@@ -165,26 +218,11 @@ brute_force_refine_clusters(Partitioned_clusters, Partitioned_points) ->
             Partitions_within_max_range = partitions:partitions_within_radius(Center, ?MAX_THRESHOLD, ?PARTITIONING_CONSTANT, Partitioned_points),
             Points_within_max_range = partitions:points_from_partitions(Partitions_within_max_range, Partitioned_points),
 
-            Point_tuples = lists:map(fun(Point) -> 
-                Dist = point_math:point_distance(Center, Point),
-                
-                Clamped_dist = case ((Dist < ?MAX_THRESHOLD) and (Dist > ?MIN_THRESHOLD)) of
-                    true ->
-                        Dist;
-                    false ->
-                        0
-                    end,
-
-                Partitions_within_range = partitions:partitions_within_radius(Center, ?MAX_THRESHOLD, ?PARTITIONING_CONSTANT, Partitioned_points),
-                Points_within_range = partitions:points_from_partitions(Partitions_within_range, Partitioned_points),
-
-                Score = 
-                    case Clamped_dist == 0 of
-                        true -> 0;
-                        false -> score_cluster(Points_within_range, Center, Clamped_dist)
-                    end,
-                {Score, Clamped_dist}
+            Points_sorted = lists:sort(fun(A, B) ->
+                point_math:point_distance(Center, A) < point_math:point_distance(Center, B)
             end, Points_within_max_range),
+
+            Point_tuples = get_point_tuples(Points_sorted, Center),
 
             case length(Point_tuples) == 0 of
                 true -> 
