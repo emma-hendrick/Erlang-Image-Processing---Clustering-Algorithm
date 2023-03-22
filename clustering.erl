@@ -144,29 +144,6 @@ generate_clusters(Partitions) ->
     ).
 
 
-%% Calculate the average of an array of points
-calc_average_point(Points) -> 
-    Point_count = length(Points),
-    Total_point = lists:foldl(
-        fun(Point, Acc) ->
-            {Point_x, Point_y, Point_z} = Point,
-            {Total_x, Total_y, Total_z} = Acc,
-            {
-                Point_x + Total_x,
-                Point_y + Total_y,
-                Point_z + Total_z
-            }
-            end, 
-        {0, 0, 0}, 
-        Points),
-    {X, Y, Z} = Total_point,
-    {
-        X / Point_count,
-        Y / Point_count,
-        Z / Point_count
-    }.
-
-
 %% Get all of the point tuples
 get_point_tuples([], _) -> [{0, ?MIN_THRESHOLD}];
 
@@ -240,10 +217,10 @@ brute_force_refine_clusters(Partitioned_clusters, Partitioned_points) ->
                         false ->
 
                             Relevant_points = point_threshold(Points_within_max_range, Center, Threshold),
-                            Updated_cluster_center = point_math:round_point(calc_average_point(Relevant_points)),
-                            Final_score = score_cluster(Relevant_points, Updated_cluster_center, Threshold),
+                            % Updated_cluster_center = point_math:round_point(calc_average_point(Relevant_points)),
+                            Final_score = score_cluster(Relevant_points, Center, Threshold),
 
-                            cluster(Updated_cluster_center, Final_score, Threshold)
+                            cluster(Center, Final_score, Threshold)
                         end
                 end
 

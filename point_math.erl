@@ -1,5 +1,5 @@
 -module(point_math).
--export([point_distance/2, point_similarity/2, scale_point_to_dist_circle/2, calc_average/2, round_point/1]).
+-export([point_distance/2, point_similarity/2, scale_point_to_dist_circle/2, calc_average/2, round_point/1, calc_average_point/1]).
 
 
 %% Find the difference from one three dimensional point to another
@@ -40,4 +40,27 @@ round_point(Point) ->
         round(X),
         round(Y),
         round(Z)
+    }.
+
+
+%% Calculate the average of an array of points
+calc_average_point(Points) -> 
+    Point_count = length(Points),
+    Total_point = lists:foldl(
+        fun(Point, Acc) ->
+            {Point_x, Point_y, Point_z} = Point,
+            {Total_x, Total_y, Total_z} = Acc,
+            {
+                Point_x + Total_x,
+                Point_y + Total_y,
+                Point_z + Total_z
+            }
+            end, 
+        {0, 0, 0}, 
+        Points),
+    {X, Y, Z} = Total_point,
+    {
+        X / Point_count,
+        Y / Point_count,
+        Z / Point_count
     }.
