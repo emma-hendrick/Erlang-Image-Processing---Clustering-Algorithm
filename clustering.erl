@@ -31,11 +31,10 @@
 
 %% Testing, time execution for a few different sample counts
 test(Image) ->
-    [time(Image, 1000),
-    time(Image, 2000),
-    time(Image, 3000),
-    time(Image, 4000),
-    time(Image, 5000)].
+    [time(Image, 500),
+    time(Image, 1000),
+    time(Image, 1500),
+    time(Image, 2000)].
 
 %% Testing, time the execution of a single analysis
 time(Image, Sample_count) ->
