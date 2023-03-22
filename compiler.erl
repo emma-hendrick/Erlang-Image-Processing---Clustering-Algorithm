@@ -12,6 +12,5 @@ compile_all() ->
     compile:file(point_math),
     compile:file(list_processes),
     compile:file(server),
-    compile:file(serial_communication),
     compile:file(env),
     ok.

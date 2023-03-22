@@ -4,7 +4,7 @@
 
 
 %% Sampling Constants
--define(SAMPLE_COUNT, 4000).
+-define(SAMPLE_COUNT, 1000).
 
 
 %% Partitioning Constant
