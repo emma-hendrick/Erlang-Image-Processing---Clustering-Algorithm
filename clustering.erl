@@ -31,21 +31,23 @@
 
 %% Testing, time execution for a few different sample counts
 test(Image) ->
-    [time(Image, 500),
+    time(Image, 500),
     time(Image, 1000),
     time(Image, 1500),
-    time(Image, 2000)].
+    time(Image, 2000),
+    {ok}.
+
 
 %% Testing, time the execution of a single analysis
 time(Image, Sample_count) ->
     Start = os:timestamp(),
-    analyze_points(image_parser:sample_image(Image, Sample_count)),
-    timer:now_diff(os:timestamp(), Start) / 1000000.
+    Result = analyze_points(image_parser:sample_image(Image, Sample_count)),
+    io:format("~p~n", [timer:now_diff(os:timestamp(), Start) / 1000000]),
+    Result.
 
 
 %% Testing
-run() ->
-    analyze_points(image_parser:sample_image("image.jpg", ?SAMPLE_COUNT)).
+run() -> time("image.jpg", ?SAMPLE_COUNT).
 
 
 %% Entry Point for the clustering algorithm

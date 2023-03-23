@@ -45,10 +45,27 @@ recieve(Sock) ->
 
 %% Get the text content of the Http request
 get_http_request_content(Http) ->
-    lists:nth(8, 
+    Line = lists:nth(
+        1,
         string:split(
             Http, 
             "\r\n",
+            all
+        )
+    ),
+    
+    Path = lists:nth(2, 
+        string:split(
+            Line,
+            " ",
+            all
+        )
+    ),
+    
+    lists:nth(2, 
+        string:split(
+            Path,
+            "?",
             all
         )
     ).
@@ -64,6 +81,7 @@ response_json(Json) ->
     iolist_to_binary(
         io_lib:fwrite(
             "HTTP/1.1 200 OK\n" ++ 
+            "Access-Control-Allow-Origin: *\n" ++
             "Content-Type: application/json\n" ++
             "Content-Length: " ++
             "~p\n\n~s",

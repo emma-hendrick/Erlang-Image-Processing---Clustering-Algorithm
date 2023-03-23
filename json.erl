@@ -20,14 +20,18 @@ serialize(List) ->
     serialize(List, "").
 
 
+%% Serialize a list of items
 serialize_list(List_items) ->
-    "[" ++ 
-        lists:map(fun(Item) ->
-        
-            Item ++ ","
-        
-        end, List_items) ++ 
-    "]".
+
+    Reversed = lists:reverse(List_items),
+    [Last | Rest] = Reversed,
+    List_items_minus_last = lists:reverse(Rest),
+
+    Comma_separated = lists:map(fun(Item) ->    
+        Item ++ ","
+    end, List_items_minus_last),
+    "[" ++ Comma_separated ++ Last ++ "]".
+
 
 %% Convert clusters to JSON
 clusters_to_json(Clusters) -> 
@@ -41,6 +45,6 @@ clusters_to_json(Clusters) ->
                 {"Score", integer_to_list(Score)}])
         
         end, Clusters),
-    "{clusters: " ++ serialize_list(Pixels) ++ "}".
+    "{\"clusters\": " ++ serialize_list(Pixels) ++ "}".
 
 
