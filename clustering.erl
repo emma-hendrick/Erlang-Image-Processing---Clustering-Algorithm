@@ -12,7 +12,7 @@
 
 
 %% Distance thresholds
--define(MIN_THRESHOLD, 15).
+-define(MIN_THRESHOLD, 25).
 -define(MAX_THRESHOLD, 45).
 
 
@@ -26,7 +26,7 @@
 
 
 %% Clustering Constants
--define(CLUSTERS_TO_KEEP, 3).
+-define(CLUSTERS_TO_KEEP, 5).
 
 
 %% Testing, time execution for a few different sample counts
@@ -307,6 +307,6 @@ serial_communication(Clusters) ->
     "python send.py 2 " ++ integer_to_list(?CLUSTERS_TO_KEEP), 
     Clusters),
 
-    os:cmd("python send.py 0"),
-    os:cmd(Create_color_list),
-    os:cmd("python send.py 4").
+    io:format("~p", [os:cmd("python send.py 0")]),
+    io:format("~p", [os:cmd(Create_color_list)]),
+    io:format("~p", [os:cmd("python send.py 4")]).

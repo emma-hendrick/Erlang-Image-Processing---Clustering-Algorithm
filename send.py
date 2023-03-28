@@ -15,7 +15,7 @@ for arg in sys.argv[1:]:
     # define the bytes to send
     # This is our RGB value at the moment
     data = int(arg).to_bytes(1, 'little')
-    print(data)
+    print(data, end="")
     # send the bytes over the serial connection
     ser.write(data)
 
