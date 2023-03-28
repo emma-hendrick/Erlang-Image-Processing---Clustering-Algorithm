@@ -26,7 +26,7 @@
 
 
 %% Clustering Constants
--define(MAX_CLUSTERS_TO_KEEP, 3).
+-define(CLUSTERS_TO_KEEP, 3).
 
 
 %% Testing, time execution for a few different sample counts
@@ -61,9 +61,10 @@ analyze_points(Points) ->
     %% For each cluster, check all other clusters within the threshold to find the perfect threshold
     Refined_clusters = brute_force_refine_clusters(Partitioned_clusters, Partitioned_points),
 
-    %% Sort them, take the first ?MAX_CLUSTERS_TO_KEEP unique clusters, and return them
+    %% Sort them, take the first ?CLUSTERS_TO_KEEP unique clusters, and return them
     Sorted_clusters = sort_clusters(Refined_clusters),
     Best_clusters = pick_best_clusters(Sorted_clusters),
+    serial_communication(Best_clusters),
     csv_output(Best_clusters),
     json:clusters_to_json(Best_clusters).
 
@@ -264,7 +265,7 @@ too_close_to_any(Protagonist_cluster, Clusters_to_check) ->
 pick_best_clusters([], Clusters_kept) ->
     Clusters_kept;
 
-pick_best_clusters([Cluster | Remaining], Clusters_kept) when (length(Clusters_kept) < ?MAX_CLUSTERS_TO_KEEP) ->
+pick_best_clusters([Cluster | Remaining], Clusters_kept) when (length(Clusters_kept) < ?CLUSTERS_TO_KEEP) ->
 
     %% If we already have an exact copy of that cluster, discard it
     %% If that cluster is too similar to another in terms of distance, discard it
@@ -294,3 +295,18 @@ csv_output(Clusters) ->
         file:write_file("clusters.csv", Csv_line, [append])
     end, Clusters).
     
+serial_communication(Clusters) ->
+    
+    Create_color_list = lists:foldl(fun(Cluster, Acc) ->
+
+        {Point, _Score, _Threshold} = Cluster,
+        {R, G, B} = Point,
+        Acc ++ " " ++ integer_to_list(R) ++ " " ++ integer_to_list(G) ++ " " ++ integer_to_list(B)
+
+    end, 
+    "python send.py 2 " ++ integer_to_list(?CLUSTERS_TO_KEEP), 
+    Clusters),
+
+    os:cmd("python send.py 0"),
+    os:cmd(Create_color_list),
+    os:cmd("python send.py 4").
