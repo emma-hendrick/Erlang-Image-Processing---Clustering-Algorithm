@@ -26,7 +26,7 @@
 
 
 %% Clustering Constants
--define(CLUSTERS_TO_KEEP, 5).
+-define(CLUSTERS_TO_KEEP, 10).
 
 
 %% Testing, time execution for a few different sample counts
@@ -304,9 +304,9 @@ serial_communication(Clusters) ->
         Acc ++ " " ++ integer_to_list(R) ++ " " ++ integer_to_list(G) ++ " " ++ integer_to_list(B)
 
     end, 
-    "python send.py 2 " ++ integer_to_list(?CLUSTERS_TO_KEEP), 
+    "python send.py 2 " ++ integer_to_list(length(Clusters)), 
     Clusters),
 
     io:format("~p", [os:cmd("python send.py 0")]),
     io:format("~p", [os:cmd(Create_color_list)]),
-    io:format("~p", [os:cmd("python send.py 4")]).
+    io:format("~p", [os:cmd("python send.py 3")]).
